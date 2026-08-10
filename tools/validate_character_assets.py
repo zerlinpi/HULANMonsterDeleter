@@ -1,53 +1,86 @@
+import base64
+import io
 from pathlib import Path
 
 from PIL import Image
 
 ROOT = Path(__file__).resolve().parents[1]
 CHARACTER_DIR = ROOT / "assets" / "character" / "generated"
-ACTIONS = ("walk", "point", "kick")
+EMBEDDED_DIR = ROOT / "assets" / "character" / "embedded"
+EMBEDDED_FRAMES = {
+    "walk": ("walk_01", "walk_02", "walk_03", "walk_04"),
+    "point": ("point_01", "point_02", "point_03"),
+    "kick": ("kick_01", "kick_02", "kick_03"),
+}
 
 
-def files_for(action: str) -> list[Path]:
+def override_files(action: str) -> list[Path]:
     direct = CHARACTER_DIR / f"{action}.png"
     result = [direct] if direct.exists() else []
     folder = CHARACTER_DIR / action
     if folder.exists():
-        result.extend(sorted(folder.glob("*.png")))
+        for ext in ("*.png", "*.webp", "*.jpg", "*.jpeg"):
+            result.extend(sorted(folder.glob(ext)))
     return result
+
+
+def embedded_files(action: str) -> list[Path]:
+    return [EMBEDDED_DIR / f"{name}.b64" for name in EMBEDDED_FRAMES[action]]
+
+
+def validate_image(image: Image.Image, label: str, errors: list[str]) -> None:
+    if image.width < 200 or image.height < 300:
+        errors.append(f"{label}: image is too small ({image.width}x{image.height})")
+
+
+def validate_override(path: Path, errors: list[str]) -> None:
+    try:
+        with Image.open(path) as image:
+            validate_image(image, str(path), errors)
+    except Exception as exc:
+        errors.append(f"{path}: cannot open image ({exc})")
+
+
+def validate_embedded(path: Path, errors: list[str]) -> None:
+    if not path.exists():
+        errors.append(f"{path}: embedded frame is missing")
+        return
+    try:
+        payload = path.read_text(encoding="utf-8").strip()
+        data = base64.b64decode(payload, validate=True)
+        with Image.open(io.BytesIO(data)) as image:
+            validate_image(image, str(path), errors)
+    except Exception as exc:
+        errors.append(f"{path}: invalid embedded image ({exc})")
 
 
 def main() -> int:
     errors: list[str] = []
-    for action in ACTIONS:
-        files = files_for(action)
-        if not files:
-            errors.append(f"{action}: no PNG pose asset found")
+    counts: dict[str, int] = {}
+
+    for action in EMBEDDED_FRAMES:
+        overrides = override_files(action)
+        if overrides:
+            counts[action] = len(overrides)
+            for path in overrides:
+                validate_override(path, errors)
             continue
-        for path in files:
-            try:
-                with Image.open(path) as image:
-                    if image.width < 200 or image.height < 300:
-                        errors.append(f"{path}: image is too small ({image.width}x{image.height})")
-                    if image.mode not in ("RGBA", "LA") and "transparency" not in image.info:
-                        errors.append(f"{path}: image has no alpha channel; use transparent PNG")
-                    else:
-                        lo, _ = image.convert("RGBA").getchannel("A").getextrema()
-                        if lo >= 250:
-                            errors.append(f"{path}: alpha channel is effectively opaque; remove the background")
-            except Exception as exc:
-                errors.append(f"{path}: cannot open image ({exc})")
+
+        frames = embedded_files(action)
+        counts[action] = len(frames)
+        for path in frames:
+            validate_embedded(path, errors)
 
     if errors:
         print("[ERROR] AI character assets are not ready:")
         for error in errors:
             print(f"  - {error}")
-        print("\nGenerate them first with:")
-        print("  python tools\\comfyui_generate_poses.py")
+        print("\nThe repository should already contain these frames. Run git pull again if files are missing.")
         return 2
 
-    print("[OK] AI character assets validated:")
-    for action in ACTIONS:
-        print(f"  {action}: {len(files_for(action))} file(s)")
+    print("[OK] Included AI character assets validated:")
+    for action in ("walk", "point", "kick"):
+        print(f"  {action}: {counts[action]} frame(s)")
     return 0
 
 
