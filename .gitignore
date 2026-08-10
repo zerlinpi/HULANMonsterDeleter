@@ -6,3 +6,4 @@ build/
 dist/
 *.spec
 assets/generated/
+.pose_generation/
