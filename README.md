@@ -1,36 +1,57 @@
-# Photo Monster Deleter
+# HULAN Monster Deleter — AI Action Pose Edition
 
-一个 Windows 桌面文件删除动画工具。当前版本已经把原来的怪兽角色替换为两张内置照片，并把照片做成轻微摇摆、行走、冲击和离场动画。右键选择文件或文件夹后，程序会播放动画并在明确确认后执行删除。
+Windows 桌面文件删除动画工具。这个版本不再使用“同一张照片旋转/缩放”伪装走路、指向和踢腿，而是要求先根据原始照片生成三组真正不同的人物动作图：
 
-## 当前版本变化
+```text
+原始照片
+  ↓
+AI 生成人物走路图
+  ↓
+AI 生成人物指东西图
+  ↓
+AI 生成人物踢腿图
+  ↓
+透明 PNG 动作资源
+  ↓
+PyQt6 播放 + 删除文件
+```
 
-- 使用仓库内 `embedded_photos.py` 内置的两张照片，不需要另外复制人物图片。
-- 第一张全身照片用于行走、指向、冲击、离场动画。
-- 第二张近景照片用于确认气泡头像和打包后的 EXE 图标。
-- 动画不是 AI 生成的新姿势，而是对你提供照片做旋转、缩放、位移和镜像形成的动态效果，因此人物外观不会被重新绘制。
-- 支持文件和文件夹右键菜单。
-- 默认执行**真实永久删除**：文件使用 `Path.unlink()`，文件夹使用 `shutil.rmtree()`。
-- 增加磁盘根目录、Windows、Program Files、用户主目录等关键路径保护。
-- 如果只是双击运行 `main.py`/EXE，没有通过右键菜单传入文件路径，则进入演示模式，不会删除文件。
-- 按 `Esc` 可以退出。
+> 默认删除模式仍为 `permanent`，确认后会真实永久删除目标文件/文件夹，不进入回收站。
 
-> **警告：默认删除模式为 permanent，删除后不会进入回收站，也无法通过本程序恢复。**
+## V2 动画标准
+
+应用读取：
+
+```text
+assets/character/generated/
+├─ walk/
+│  ├─ frame_001.png
+│  └─ frame_002.png
+├─ point/
+│  ├─ frame_001.png
+│  └─ frame_002.png
+└─ kick/
+   ├─ frame_001.png
+   └─ frame_002.png
+```
+
+动作本身必须来自不同的 AI 生成姿势。运行时只添加很轻微的呼吸、上下浮动和冲击缩放，不再拿原照片大幅旋转冒充不同动作。
 
 ## 代码结构
 
 ```text
-HULANMonsterDeleter/
-├─ main.py                 # PyQt6 UI、照片动画、右键菜单、删除流程
-├─ delete_engine.py        # 永久删除/回收站删除与安全路径保护
-├─ embedded_photos.py      # 两张照片的 base64 数据
-├─ requirements.txt
-├─ build.bat               # Windows 一键打包
-├─ tools/
-│  └─ make_icon.py         # 从第二张照片生成 EXE 图标
-└─ assets/                 # 原有 BGM / 爆炸等资源
+main.py                           # 入口
+ai_main.py                        # 删除动画流程、右键菜单、音效、真实删除触发
+character_animator.py             # AI 动作 PNG 加载与播放
+app_ui.py                         # 气泡和确认按钮
+delete_engine.py                  # 永久删除/回收站模式与关键目录保护
+embedded_photos.py                # 原始两张参考照片
+tools/comfyui_generate_poses.py   # 调用本机 ComfyUI 自动生成 walk/point/kick
+tools/validate_character_assets.py# 打包前检查透明 PNG 动作资源
+build.bat                         # 一键 PyInstaller 打包
 ```
 
-## 首次拉取
+## 1. 拉取代码
 
 ```bat
 git clone https://github.com/zerlinpi/HULANMonsterDeleter.git
@@ -38,73 +59,136 @@ cd HULANMonsterDeleter
 python -m pip install -r requirements.txt
 ```
 
-本地测试：
+如果你在开发分支测试 V2：
+
+```bat
+git fetch origin
+git checkout ai-action-poses-v2
+```
+
+## 2. 启动 ComfyUI
+
+默认脚本连接：
+
+```text
+http://127.0.0.1:8188
+```
+
+先正常启动本机 ComfyUI，例如：
+
+```bat
+cd C:\你的ComfyUI目录
+python main.py --listen 127.0.0.1 --port 8188
+```
+
+保持这个窗口运行。
+
+## 3. 查看可用 checkpoint
+
+回到本仓库目录执行：
+
+```bat
+python tools\comfyui_generate_poses.py
+```
+
+如果 ComfyUI 中有多个 checkpoint，脚本会列出可用名称，然后指定其中一个：
+
+```bat
+python tools\comfyui_generate_poses.py --checkpoint "你的模型文件名.safetensors"
+```
+
+脚本会：
+
+1. 从 `embedded_photos.py` 导出第一张全身参考照；
+2. 缩放参考图后上传到本机 ComfyUI；
+3. 使用 img2img 分别生成 walk / point / kick；
+4. 每个动作默认生成两个关键姿势；
+5. 要求纯绿色背景；
+6. 自动抠掉绿色并保存透明 PNG；
+7. 写入 `assets\character\generated\...`。
+
+默认生成参数：
+
+```text
+steps   = 30
+cfg     = 5.5
+denoise = 0.74
+sampler = dpmpp_2m
+scheduler = karras
+```
+
+如果人物身份保留较好但动作变化不足，可以提高：
+
+```bat
+python tools\comfyui_generate_poses.py --checkpoint "模型.safetensors" --denoise 0.78
+```
+
+如果动作够了但脸变化太大，可以降低：
+
+```bat
+python tools\comfyui_generate_poses.py --checkpoint "模型.safetensors" --denoise 0.68
+```
+
+## 4. 检查 AI 动作资源
+
+```bat
+python tools\validate_character_assets.py
+```
+
+需要看到：
+
+```text
+[OK] AI character assets validated
+```
+
+验证器会拒绝：
+
+- walk / point / kick 缺失；
+- 图片尺寸过小；
+- 没有 Alpha 通道；
+- 实际仍是不透明背景的 PNG。
+
+## 5. 本地运行
+
+演示模式，不删除文件：
 
 ```bat
 python main.py
 ```
 
-上面是演示模式，不会删除文件。
-
-测试某个指定文件时：
+测试指定文件：
 
 ```bat
 python main.py "C:\Users\你的用户名\Desktop\test.txt"
 ```
 
-程序仍会要求你点击屏幕位置并再次确认，然后才会删除该路径。
+程序仍会显示确认按钮后才执行删除。
 
-## 一键打包 EXE
-
-在仓库目录执行：
+## 6. 打包 EXE
 
 ```bat
 build.bat
 ```
 
-脚本会自动：
+`build.bat` 会先检查 AI 动作资源。缺少 walk / point / kick 时会停止打包，避免再次把旧的低质量动画发布出去。
 
-1. 安装 `requirements.txt` 中的依赖；
-2. 从第二张内置照片生成 `assets\generated\photo_character.ico`；
-3. 使用 PyInstaller 打包；
-4. 输出：
+成功后：
 
 ```text
 dist\MonsterDeleter.exe
 ```
 
-也可以手动执行：
+## 7. Git 提交生成后的动作图片
+
+如果你希望以后 `git clone` 后不需要重新生成图片，可以把生成后的透明 PNG 一并提交：
 
 ```bat
-python tools\make_icon.py
-python -m PyInstaller --noconfirm --clean --onefile --windowed --name MonsterDeleter --icon assets\generated\photo_character.ico --add-data "assets;assets" --hidden-import send2trash main.py
+git add assets\character\generated
+git commit -m "Add generated walk point kick character poses"
+git push
 ```
 
-## 注册右键菜单
-
-运行一次：
-
-```bat
-dist\MonsterDeleter.exe
-```
-
-程序会在当前 Windows 用户下注册：
-
-```text
-召唤照片角色删除
-```
-
-之后可以：
-
-1. 在资源管理器中右键文件或文件夹；
-2. 选择“召唤照片角色删除”；
-3. 在屏幕上点击目标所在位置；
-4. 在确认框中选择“永久删除”；
-5. 删除动作与爆炸效果同步执行。
-
-注册表写入 `HKEY_CURRENT_USER`，正常情况下不需要管理员权限。
-
-## 如果想改成回收站模式
+## 删除模式
 
 默认：
 
@@ -112,54 +196,30 @@ dist\MonsterDeleter.exe
 MONSTER_DELETE_MODE=permanent
 ```
 
-临时切换为回收站模式：
+永久模式：
+
+- 普通文件：`Path.unlink()`
+- 普通目录：`shutil.rmtree()`
+
+临时改为回收站：
 
 ```bat
 set MONSTER_DELETE_MODE=trash
 python main.py "C:\path\to\test.txt"
 ```
 
-打包后的 EXE 同样支持这个环境变量：
+## 安全保护
 
-```bat
-set MONSTER_DELETE_MODE=trash
-dist\MonsterDeleter.exe "C:\path\to\test.txt"
-```
+`delete_engine.py` 会拒绝明显高风险目标，包括：
 
-## Git 更新
-
-以后仓库有新修改时：
-
-```bat
-cd HULANMonsterDeleter
-git pull origin main
-```
-
-然后重新打包：
-
-```bat
-build.bat
-```
-
-如果本地已经修改过代码，建议先检查：
-
-```bat
-git status
-git diff
-```
-
-再决定提交、暂存或合并后执行 `git pull`。
-
-## 删除安全限制
-
-永久删除前，`delete_engine.py` 会拒绝下列高风险目标：
-
-- 磁盘根目录，例如 `C:\`；
-- Windows/SystemRoot 及其内部路径；
-- Program Files / Program Files (x86) 及其内部路径；
-- ProgramData 及其内部路径；
+- 磁盘根目录；
+- Windows/SystemRoot 及内部路径；
+- Program Files / Program Files (x86) 及内部路径；
+- ProgramData 及内部路径；
 - 当前用户主目录本身。
 
-用户主目录中的普通文件（例如桌面测试文件）不受“主目录本身”保护限制，因此仍可以按正常流程永久删除。
+普通桌面文件和非关键目录中的普通文件夹仍可按确认流程删除。
 
-这些限制用于防止把娱乐动画误操作成系统破坏工具。普通用户文件、桌面测试文件、非关键目录中的普通文件夹仍可正常永久删除。
+## 更高质量的人脸一致性
+
+仓库自带生成脚本只使用 ComfyUI 内置节点，因此兼容性高，但它是基础 img2img 方案。若后续要进一步提高“脸必须高度一致”，推荐把生成环节升级为 PuLID / InstantID / IPAdapter FaceID + OpenPose ControlNet；应用侧 `walk/point/kick` 目录格式无需再修改。
