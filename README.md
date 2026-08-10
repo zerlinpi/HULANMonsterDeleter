@@ -155,10 +155,11 @@ git diff
 永久删除前，`delete_engine.py` 会拒绝下列高风险目标：
 
 - 磁盘根目录，例如 `C:\`；
-- Windows/SystemRoot；
-- Program Files / Program Files (x86)；
-- ProgramData；
-- 当前用户主目录本身；
-- 以上关键目录内部路径。
+- Windows/SystemRoot 及其内部路径；
+- Program Files / Program Files (x86) 及其内部路径；
+- ProgramData 及其内部路径；
+- 当前用户主目录本身。
+
+用户主目录中的普通文件（例如桌面测试文件）不受“主目录本身”保护限制，因此仍可以按正常流程永久删除。
 
 这些限制用于防止把娱乐动画误操作成系统破坏工具。普通用户文件、桌面测试文件、非关键目录中的普通文件夹仍可正常永久删除。
