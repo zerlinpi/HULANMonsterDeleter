@@ -1,57 +1,78 @@
 # HULAN Monster Deleter — AI Action Pose Edition
 
-Windows 桌面文件删除动画工具。这个版本不再使用“同一张照片旋转/缩放”伪装走路、指向和踢腿，而是要求先根据原始照片生成三组真正不同的人物动作图：
+Windows 桌面文件删除动画工具。当前版本已经直接包含生成好的真人风格动作帧，不再使用“同一张照片旋转 / 缩放 / 轻微扭曲”来模拟动作。
 
 ```text
-原始照片
-  ↓
-AI 生成人物走路图
-  ↓
-AI 生成人物指东西图
-  ↓
-AI 生成人物踢腿图
-  ↓
-透明 PNG 动作资源
-  ↓
-PyQt6 播放 + 删除文件
+AI 生成的真实不同姿势
+  ├─ walk  × 4
+  ├─ point × 3
+  └─ kick  × 3
+       ↓
+运行时去除与画布边缘连通的白色背景
+       ↓
+透明人物帧
+       ↓
+PyQt6 逐帧播放
+       ↓
+确认后触发删除 + 爆炸效果
 ```
 
-> 默认删除模式仍为 `permanent`，确认后会真实永久删除目标文件/文件夹，不进入回收站。
+> **警告：默认删除模式为 `permanent`。确认后会真实永久删除目标文件/文件夹，不进入回收站。**
 
-## V2 动画标准
+## 当前已经包含的动作资源
 
-应用读取：
+仓库内置 10 张动作图：
 
 ```text
-assets/character/generated/
-├─ walk/
-│  ├─ frame_001.png
-│  └─ frame_002.png
-├─ point/
-│  ├─ frame_001.png
-│  └─ frame_002.png
-└─ kick/
-   ├─ frame_001.png
-   └─ frame_002.png
+assets/character/embedded/
+├─ walk_01.b64
+├─ walk_02.b64
+├─ walk_03.b64
+├─ walk_04.b64
+├─ point_01.b64
+├─ point_02.b64
+├─ point_03.b64
+├─ kick_01.b64
+├─ kick_02.b64
+└─ kick_03.b64
 ```
 
-动作本身必须来自不同的 AI 生成姿势。运行时只添加很轻微的呼吸、上下浮动和冲击缩放，不再拿原照片大幅旋转冒充不同动作。
+这些 `.b64` 文件是动作图片的文本化封装，方便资源随 Git 仓库和 PyInstaller 一起分发。程序启动时会：
+
+1. 解码图片；
+2. 从画布边缘进行白色背景 flood-fill；
+3. 只把与边缘连通的白色背景变透明，因此白裙、白袜、白鞋不会被简单全局色键误删；
+4. 裁剪透明边缘并统一人物高度；
+5. 直接按真实动作图逐帧播放。
+
+`character_animator.py` **不会再给人物增加旋转、呼吸缩放或身体扭曲来伪造新动作**。每个动作帧都对应一张实际生成图。离场时仍会做水平镜像，这是方向切换，不会改变人体姿势。
+
+当前踢腿是 3 个真实姿势：准备 → 抬腿 → 完整侧踢。最后冲击帧会额外停留一个计时周期，让爆炸与 `kick_03` 对齐。以后补 `kick_04` 时可以继续扩展。
 
 ## 代码结构
 
 ```text
-main.py                           # 入口
-ai_main.py                        # 删除动画流程、右键菜单、音效、真实删除触发
-character_animator.py             # AI 动作 PNG 加载与播放
-app_ui.py                         # 气泡和确认按钮
-delete_engine.py                  # 永久删除/回收站模式与关键目录保护
-embedded_photos.py                # 原始两张参考照片
-tools/comfyui_generate_poses.py   # 调用本机 ComfyUI 自动生成 walk/point/kick
-tools/validate_character_assets.py# 打包前检查透明 PNG 动作资源
-build.bat                         # 一键 PyInstaller 打包
+HULANMonsterDeleter/
+├─ main.py
+├─ ai_main.py                         # UI 流程、右键菜单、动画阶段、删除触发
+├─ character_animator.py              # 内置 AI 动作帧解码、抠图和逐帧播放
+├─ app_ui.py                          # 气泡与确认按钮
+├─ delete_engine.py                   # 永久删除 / 回收站模式与安全保护
+├─ embedded_photos.py                 # 原始参考照片资源
+├─ assets/
+│  └─ character/
+│     ├─ embedded/                    # 当前随仓库发布的 10 个动作帧
+│     └─ generated/                   # 可选的本地自定义动作覆盖目录
+├─ tools/
+│  ├─ validate_character_assets.py    # 打包前检查内置动作资源
+│  ├─ make_icon.py
+│  └─ comfyui_generate_poses.py       # 可选：未来重新生成动作时使用
+└─ build.bat
 ```
 
-## 1. 拉取代码
+## 拉取并运行
+
+首次下载：
 
 ```bat
 git clone https://github.com/zerlinpi/HULANMonsterDeleter.git
@@ -59,102 +80,37 @@ cd HULANMonsterDeleter
 python -m pip install -r requirements.txt
 ```
 
-如果你在开发分支测试 V2：
+以后更新：
 
 ```bat
-git fetch origin
-git checkout ai-action-poses-v2
+git checkout main
+git pull origin main
 ```
 
-## 2. 启动 ComfyUI
+**现在不需要启动 ComfyUI，也不需要再次生成图片。**
 
-默认脚本连接：
-
-```text
-http://127.0.0.1:8188
-```
-
-先正常启动本机 ComfyUI，例如：
-
-```bat
-cd C:\你的ComfyUI目录
-python main.py --listen 127.0.0.1 --port 8188
-```
-
-保持这个窗口运行。
-
-## 3. 查看可用 checkpoint
-
-回到本仓库目录执行：
-
-```bat
-python tools\comfyui_generate_poses.py
-```
-
-如果 ComfyUI 中有多个 checkpoint，脚本会列出可用名称，然后指定其中一个：
-
-```bat
-python tools\comfyui_generate_poses.py --checkpoint "你的模型文件名.safetensors"
-```
-
-脚本会：
-
-1. 从 `embedded_photos.py` 导出第一张全身参考照；
-2. 缩放参考图后上传到本机 ComfyUI；
-3. 使用 img2img 分别生成 walk / point / kick；
-4. 每个动作默认生成两个关键姿势；
-5. 要求纯绿色背景；
-6. 自动抠掉绿色并保存透明 PNG；
-7. 写入 `assets\character\generated\...`。
-
-默认生成参数：
-
-```text
-steps   = 30
-cfg     = 5.5
-denoise = 0.74
-sampler = dpmpp_2m
-scheduler = karras
-```
-
-如果人物身份保留较好但动作变化不足，可以提高：
-
-```bat
-python tools\comfyui_generate_poses.py --checkpoint "模型.safetensors" --denoise 0.78
-```
-
-如果动作够了但脸变化太大，可以降低：
-
-```bat
-python tools\comfyui_generate_poses.py --checkpoint "模型.safetensors" --denoise 0.68
-```
-
-## 4. 检查 AI 动作资源
+先检查内置动作：
 
 ```bat
 python tools\validate_character_assets.py
 ```
 
-需要看到：
+正常输出类似：
 
 ```text
-[OK] AI character assets validated
+[OK] Included AI character assets validated:
+  walk: 4 frame(s)
+  point: 3 frame(s)
+  kick: 3 frame(s)
 ```
 
-验证器会拒绝：
-
-- walk / point / kick 缺失；
-- 图片尺寸过小；
-- 没有 Alpha 通道；
-- 实际仍是不透明背景的 PNG。
-
-## 5. 本地运行
-
-演示模式，不删除文件：
+演示模式：
 
 ```bat
 python main.py
 ```
+
+演示模式没有目标路径，因此不会删除文件。
 
 测试指定文件：
 
@@ -162,31 +118,46 @@ python main.py
 python main.py "C:\Users\你的用户名\Desktop\test.txt"
 ```
 
-程序仍会显示确认按钮后才执行删除。
+程序会在真正删除前显示确认按钮。
 
-## 6. 打包 EXE
+## 一键打包 EXE
+
+在仓库根目录执行：
 
 ```bat
 build.bat
 ```
 
-`build.bat` 会先检查 AI 动作资源。缺少 walk / point / kick 时会停止打包，避免再次把旧的低质量动画发布出去。
+打包脚本会自动：
 
-成功后：
+1. 安装依赖；
+2. 验证已经随仓库提供的 walk / point / kick 动作资源；
+3. 生成 EXE 图标；
+4. 用 PyInstaller 打包 `assets`；
+5. 输出：
 
 ```text
 dist\MonsterDeleter.exe
 ```
 
-## 7. Git 提交生成后的动作图片
+不再有“先运行 ComfyUI 生成动作资源”的前置步骤。
 
-如果你希望以后 `git clone` 后不需要重新生成图片，可以把生成后的透明 PNG 一并提交：
+## Windows 右键菜单
 
-```bat
-git add assets\character\generated
-git commit -m "Add generated walk point kick character poses"
-git push
+运行一次程序后，会在当前 Windows 用户下注册文件和目录右键菜单：
+
+```text
+召唤 AI 角色删除
 ```
+
+随后可以在资源管理器中：
+
+1. 右键一个普通文件或文件夹；
+2. 选择“召唤 AI 角色删除”；
+3. 点击屏幕上的目标位置；
+4. 等角色走到目标旁并指向目标；
+5. 点击确认；
+6. 踢击动作播放到冲击帧时触发爆炸与删除。
 
 ## 删除模式
 
@@ -198,28 +169,47 @@ MONSTER_DELETE_MODE=permanent
 
 永久模式：
 
-- 普通文件：`Path.unlink()`
-- 普通目录：`shutil.rmtree()`
+- 文件：`Path.unlink()`
+- 文件夹：`shutil.rmtree()`
 
-临时改为回收站：
+临时切换为回收站模式：
 
 ```bat
 set MONSTER_DELETE_MODE=trash
 python main.py "C:\path\to\test.txt"
 ```
 
-## 安全保护
+打包后的 EXE 也支持相同环境变量。
+
+## 删除安全保护
 
 `delete_engine.py` 会拒绝明显高风险目标，包括：
 
 - 磁盘根目录；
-- Windows/SystemRoot 及内部路径；
-- Program Files / Program Files (x86) 及内部路径；
-- ProgramData 及内部路径；
+- Windows / SystemRoot 及其内部路径；
+- Program Files / Program Files (x86) 及其内部路径；
+- ProgramData 及其内部路径；
 - 当前用户主目录本身。
 
 普通桌面文件和非关键目录中的普通文件夹仍可按确认流程删除。
 
-## 更高质量的人脸一致性
+## 未来替换动作资源
 
-仓库自带生成脚本只使用 ComfyUI 内置节点，因此兼容性高，但它是基础 img2img 方案。若后续要进一步提高“脸必须高度一致”，推荐把生成环节升级为 PuLID / InstantID / IPAdapter FaceID + OpenPose ControlNet；应用侧 `walk/point/kick` 目录格式无需再修改。
+如果以后想替换角色，可以直接在：
+
+```text
+assets/character/generated/
+```
+
+按动作创建：
+
+```text
+generated/
+├─ walk/
+├─ point/
+└─ kick/
+```
+
+放入 PNG / WebP / JPG 文件。`generated` 中的文件会优先于仓库内置动作资源，代码无需再次改动。
+
+`tools/comfyui_generate_poses.py` 仍保留，但它现在只是**可选的重新生成工具**，不是运行或打包所必需的步骤。
