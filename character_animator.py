@@ -192,12 +192,20 @@ class PoseAnimator(QLabel):
 
         max_w = max(p.width() for p in sources)
         max_h = max(p.height() for p in sources)
-        canvas_w = max_w + 80
+        # Keep the action canvas nearly the same size between walk/point/kick so
+        # switching poses does not make the character jump across the desktop.
+        canvas_w = max(max_w + 60, int(target_height * 1.15))
         canvas_h = max_h + 64
 
         # One source image equals one animation frame. No rotation, scaling pulse,
         # or synthetic body warp is inserted here.
         self.frames = [self._place_on_canvas(source, canvas_w, canvas_h) for source in sources]
+        # The current asset set has three kick images (prepare, raise, impact).
+        # Hold the impact pose for one extra timer tick so the existing 60%
+        # explosion trigger lands on kick_03 instead of kick_02.
+        if action == "kick" and len(self.frames) == 3:
+            self.frames.append(self.frames[-1])
+
         self.current_frame = 0
         self.resize(canvas_w, canvas_h)
         self._update_frame()
