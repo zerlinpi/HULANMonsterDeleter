@@ -8,15 +8,24 @@ if errorlevel 1 (
     exit /b 1
 )
 
-echo [1/4] Installing build dependencies...
+echo [1/5] Installing build dependencies...
 python -m pip install -r requirements.txt
 if errorlevel 1 exit /b 1
 
-echo [2/4] Generating application icon from the embedded photo...
+echo [2/5] Validating AI walk / point / kick pose assets...
+python tools\validate_character_assets.py
+if errorlevel 1 (
+    echo.
+    echo Generate the action images first with local ComfyUI:
+    echo   python tools\comfyui_generate_poses.py --checkpoint "YOUR_CHECKPOINT.safetensors"
+    exit /b 1
+)
+
+echo [3/5] Generating application icon from the embedded portrait...
 python tools\make_icon.py
 if errorlevel 1 exit /b 1
 
-echo [3/4] Building MonsterDeleter.exe...
+echo [4/5] Building MonsterDeleter.exe...
 python -m PyInstaller ^
   --noconfirm ^
   --clean ^
@@ -29,6 +38,6 @@ python -m PyInstaller ^
   main.py
 if errorlevel 1 exit /b 1
 
-echo [4/4] Done.
+echo [5/5] Done.
 echo EXE: %CD%\dist\MonsterDeleter.exe
 endlocal
