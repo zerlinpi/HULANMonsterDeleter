@@ -12,12 +12,12 @@ echo [1/5] Installing build dependencies...
 python -m pip install -r requirements.txt
 if errorlevel 1 exit /b 1
 
-echo [2/5] Validating AI walk / point / kick pose assets...
+echo [2/5] Validating included AI walk / point / kick frames...
 python tools\validate_character_assets.py
 if errorlevel 1 (
     echo.
-    echo Generate the action images first with local ComfyUI:
-    echo   python tools\comfyui_generate_poses.py --checkpoint "YOUR_CHECKPOINT.safetensors"
+    echo [ERROR] Included action assets are missing or damaged.
+    echo Run: git pull origin main
     exit /b 1
 )
 
