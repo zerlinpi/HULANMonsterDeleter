@@ -1,66 +1,164 @@
-# 🦖 大将怪兽摧毁 - Desktop Monster Deleter
+# Photo Monster Deleter
 
-这是一个充满趣味的 Windows 桌面交互应用！当你想删除电脑上的文件时，不再是单调的系统提示，而是可以召唤出一只强悍的“大将怪兽”，让他迈着嚣张的步伐走到文件跟前，一脚将文件连同垃圾桶一起踢爆粉碎！
+一个 Windows 桌面文件删除动画工具。当前版本已经把原来的怪兽角色替换为两张内置照片，并把照片做成轻微摇摆、行走、冲击和离场动画。右键选择文件或文件夹后，程序会播放动画并在明确确认后执行删除。
 
-## ✨ 核心亮点
+## 当前版本变化
 
-- 🎯 **狙击级精准锁定**：高级半透明磨砂 UI 与红色十字狙击光标，给你沉浸式的瞄准体验。
-- 🦖 **生动的怪兽动效**：包括出场、行走、指点、踢爆、飞离等全套精心设计的逐帧动画（支持完美绿幕抠图）。
-- 💥 **硬核视听震撼**：全程伴随专属 BGM、怪兽语音以及爆破音效，删除文件也能成为一种享受。
-- 🖱️ **智能右键菜单集成**：程序只需运行一次，即可自动在 Windows 右键菜单中注册“召唤大将怪兽摧毁”选项。
-- 🚀 **指哪打哪**：在任意文件夹或桌面右击文件并召唤怪兽，它都能精确获取鼠标的绝对物理坐标，实现精准打击。
+- 使用仓库内 `embedded_photos.py` 内置的两张照片，不需要另外复制人物图片。
+- 第一张全身照片用于行走、指向、冲击、离场动画。
+- 第二张近景照片用于确认气泡头像和打包后的 EXE 图标。
+- 动画不是 AI 生成的新姿势，而是对你提供照片做旋转、缩放、位移和镜像形成的动态效果，因此人物外观不会被重新绘制。
+- 支持文件和文件夹右键菜单。
+- 默认执行**真实永久删除**：文件使用 `Path.unlink()`，文件夹使用 `shutil.rmtree()`。
+- 增加磁盘根目录、Windows、Program Files、用户主目录等关键路径保护。
+- 如果只是双击运行 `main.py`/EXE，没有通过右键菜单传入文件路径，则进入演示模式，不会删除文件。
+- 按 `Esc` 可以退出。
 
-## 📦 如何使用（无需安装环境）
+> **警告：默认删除模式为 permanent，删除后不会进入回收站，也无法通过本程序恢复。**
 
-如果你拿到了打包好的 `MonsterDeleter.exe`，只需要两步：
+## 代码结构
 
-1. **注册右键菜单**：双击运行一次 `MonsterDeleter.exe`，此时屏幕会变暗并出现狙击瞄准界面，同时系统后台已自动将右键选项写入注册表。按 `Esc` 或关闭程序即可。
-2. **享受摧毁**：在桌面上或任意文件夹中，右键点击你想删除的倒霉文件，选择 **“召唤大将怪兽摧毁”**。屏幕变暗后，使用红色准星点击该文件，欣赏怪兽的表演！
-
-> ⚠️ **注意**：程序实际使用了 `send2trash`（安全移至回收站）而不是彻底粉碎，所以如果你后悔了，还可以从回收站把文件捞回来。
-
-## 🛠️ 开发者指南 (Developer Guide)
-
-如果你想通过源码运行或自己修改代码，请确保你的系统上安装了 Python 3。
-
-### 1. 安装依赖
-
-```bash
-pip install -r requirements.txt
+```text
+HULANMonsterDeleter/
+├─ main.py                 # PyQt6 UI、照片动画、右键菜单、删除流程
+├─ delete_engine.py        # 永久删除/回收站删除与安全路径保护
+├─ embedded_photos.py      # 两张照片的 base64 数据
+├─ requirements.txt
+├─ build.bat               # Windows 一键打包
+├─ tools/
+│  └─ make_icon.py         # 从第二张照片生成 EXE 图标
+└─ assets/                 # 原有 BGM / 爆炸等资源
 ```
 
-### 2. 本地运行测试
+## 首次拉取
 
-```bash
-# 开启手动狙击模式
+```bat
+git clone https://github.com/zerlinpi/HULANMonsterDeleter.git
+cd HULANMonsterDeleter
+python -m pip install -r requirements.txt
+```
+
+本地测试：
+
+```bat
 python main.py
-
-# 指定删除某个特定文件 (替换成你的文件路径)
-python main.py "C:\path\to\your\file.txt"
 ```
 
-### 3. 一键打包发布 (PyInstaller)
+上面是演示模式，不会删除文件。
 
-使用以下命令可将 Python 源码与所有的图片 (`assets/`)、音频等依赖一键打包成单文件的 `.exe` 程序：
+测试某个指定文件时：
 
-```bash
-pyinstaller --noconfirm --onefile --windowed --name MonsterDeleter --add-data "assets;assets" --hidden-import send2trash main.py
-```
-> **提示**: 生成的独立程序会在 `dist/MonsterDeleter.exe`。程序会在运行时自动将 `assets` 目录解压到临时路径 (`sys._MEIPASS`) 并完美加载。
-
-## 📂 项目结构
-```
-MonsterDeleter/
-│
-├── main.py                  # 核心主程序逻辑 (UI渲染、动画播放、注册表写入)
-├── register_menu.py         # (遗留/参考) 原版菜单注册脚本
-├── requirements.txt         # 运行所需依赖
-├── assets/                  # 资源目录 (打包时嵌入 exe)
-│   ├── 音频/                # bgm, 音效等
-│   └── *_transparent.png    # 优化后的高压缩比透明背景序列帧
-├── scripts/                 # 工具脚本目录 (绿幕抠图、切片等)
-└── tests/                   # 开发过程中的测试用例
+```bat
+python main.py "C:\Users\你的用户名\Desktop\test.txt"
 ```
 
-## 📜 许可
-本项目仅供娱乐与学习使用。
+程序仍会要求你点击屏幕位置并再次确认，然后才会删除该路径。
+
+## 一键打包 EXE
+
+在仓库目录执行：
+
+```bat
+build.bat
+```
+
+脚本会自动：
+
+1. 安装 `requirements.txt` 中的依赖；
+2. 从第二张内置照片生成 `assets\generated\photo_character.ico`；
+3. 使用 PyInstaller 打包；
+4. 输出：
+
+```text
+dist\MonsterDeleter.exe
+```
+
+也可以手动执行：
+
+```bat
+python tools\make_icon.py
+python -m PyInstaller --noconfirm --clean --onefile --windowed --name MonsterDeleter --icon assets\generated\photo_character.ico --add-data "assets;assets" --hidden-import send2trash main.py
+```
+
+## 注册右键菜单
+
+运行一次：
+
+```bat
+dist\MonsterDeleter.exe
+```
+
+程序会在当前 Windows 用户下注册：
+
+```text
+召唤照片角色删除
+```
+
+之后可以：
+
+1. 在资源管理器中右键文件或文件夹；
+2. 选择“召唤照片角色删除”；
+3. 在屏幕上点击目标所在位置；
+4. 在确认框中选择“永久删除”；
+5. 删除动作与爆炸效果同步执行。
+
+注册表写入 `HKEY_CURRENT_USER`，正常情况下不需要管理员权限。
+
+## 如果想改成回收站模式
+
+默认：
+
+```text
+MONSTER_DELETE_MODE=permanent
+```
+
+临时切换为回收站模式：
+
+```bat
+set MONSTER_DELETE_MODE=trash
+python main.py "C:\path\to\test.txt"
+```
+
+打包后的 EXE 同样支持这个环境变量：
+
+```bat
+set MONSTER_DELETE_MODE=trash
+dist\MonsterDeleter.exe "C:\path\to\test.txt"
+```
+
+## Git 更新
+
+以后仓库有新修改时：
+
+```bat
+cd HULANMonsterDeleter
+git pull origin main
+```
+
+然后重新打包：
+
+```bat
+build.bat
+```
+
+如果本地已经修改过代码，建议先检查：
+
+```bat
+git status
+git diff
+```
+
+再决定提交、暂存或合并后执行 `git pull`。
+
+## 删除安全限制
+
+永久删除前，`delete_engine.py` 会拒绝下列高风险目标：
+
+- 磁盘根目录，例如 `C:\`；
+- Windows/SystemRoot；
+- Program Files / Program Files (x86)；
+- ProgramData；
+- 当前用户主目录本身；
+- 以上关键目录内部路径。
+
+这些限制用于防止把娱乐动画误操作成系统破坏工具。普通用户文件、桌面测试文件、非关键目录中的普通文件夹仍可正常永久删除。
